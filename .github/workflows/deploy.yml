@@ -1,0 +1,68 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy on self-hosted server
+    runs-on: self-hosted
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      PORT: '3001'
+      NODE_ENV: production
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL || 'http://localhost' }}
+      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Write production environment
+        run: |
+          cat > .env <<EOF
+          MONGODB_URI=${MONGODB_URI}
+          PORT=${PORT}
+          NODE_ENV=${NODE_ENV}
+          FRONTEND_URL=${FRONTEND_URL}
+          NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+          EOF
+          chmod 600 .env
+
+      - name: Build and restart containers
+        run: |
+          docker compose up --build -d
+          docker image prune -f
+
+      - name: Show service status
+        run: docker compose ps
+
+      - name: Health check API
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs api --tail=100
+          exit 1
+
+      - name: Health check web
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs web --tail=100
+          exit 1

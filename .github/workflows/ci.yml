@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      NX_DAEMON: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+      - run: npm i -f
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build:api:docker
+      - run: npm run build:web:docker
