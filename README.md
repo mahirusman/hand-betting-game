@@ -202,38 +202,3 @@ NEXT_PUBLIC_API_URL  # Empty when host Nginx proxies /api on the same IP
 ```
 
 Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
-
----
-
-## AI usage note
-
-This project was written with AI assistance (Anthropic's Claude). The split is roughly:
-
-- **Handwritten / human-led**: project structure, Nx workspace setup, Docker + Nginx + GitHub Actions wiring, Mongoose schema design, casino dark-table visual direction (gold accents, glass-card, tile typography), copy decisions ("Hall of fame", "Dealing…", etc.).
-- **AI-assisted**: scaffolding the NestJS modules, the initial Tailwind component layouts, the game-engine and rules functions, the Zustand store, Vitest/Jest tests, and large parts of this README. Every AI-generated file was read, edited, and reviewed by hand before commit.
-- **AI-driven review pass**: a final audit (this PR) caught a tile-scaling double-count when a hand contains duplicate non-number tiles, a mismatch between the displayed hand value and the value used to evaluate the bet, and a missing global tile-value game-over check. Those fixes are documented in the commit history.
-
----
-
-## Video walkthrough
-
-The submission ships with a short screen recording covering:
-
-1. Landing page — hero, tile preview, leaderboard.
-2. Starting a new game and reading a hand.
-3. Placing a bet, watching the result animation, and seeing dynamic scaling on a dragon/wind tile.
-4. Triggering a reshuffle by playing through the draw pile.
-5. Hitting a game-over via a tile reaching 0 or 10, and the end-game summary.
-6. A quick tour of `libs/shared` to show the engine + config separation.
-
-The recording lives alongside the repo at submission time (link in the submission form).
-
----
-
-## Known limitations
-
-- **MongoDB Atlas required.** The leaderboard and game state are persisted in Mongo. There is no localStorage fallback; without a reachable database the API will refuse to boot.
-- **Single-player only.** No auth, no game-ownership checks. Anyone with a `gameId` can place bets on it. Acceptable for a single-user demo, would need session/auth for multiplayer.
-- **No optimistic locking on bets.** `findById` then `findOneAndUpdate` is a check-then-write; two simultaneous bets on the same `gameId` race. Not exploitable in normal play but worth a Mongoose `version` field if multiplayer ships.
-- **Edge case in bet evaluation.** When dynamic scaling would push the new hand's value past the comparison threshold (e.g. previous=10, pre-scale=11, "lower" bet causes -1, post-scale=10), the official result is the post-scale comparison so the displayed values always agree with the verdict. The provisional and final bet results can therefore disagree in rare boundary cases; the post-scale result is authoritative.
-- **History cap of 10 on the server.** The UI shows the last 5; older entries beyond 10 are dropped.
