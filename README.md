@@ -20,8 +20,13 @@ The shared library owns every game rule (tile generation, shuffling, dealing, be
 ```bash
 npm install
 cp .env.example .env
-npm run dev:api   # http://localhost:3001/api
-npm run dev:web   # http://localhost:3000
+npm run dev:web   # Start the web app at http://localhost:3000
+```
+
+Stop the web-only process, then start both apps together:
+
+```bash
+npm run dev       # Starts the API and web app together
 ```
 
 Swagger docs live at `http://localhost:3001/api/docs`.
