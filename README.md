@@ -23,7 +23,7 @@ cp .env.example .env
 npm run dev:web   # Start the web app at http://localhost:3000
 ```
 
-Stop the web-only process, then start both apps together:
+temp fix:Stop the web-only process, then start both apps together:
 
 ```bash
 npm run dev       # Starts the API and web app together
