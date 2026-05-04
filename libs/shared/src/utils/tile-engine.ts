@@ -1,3 +1,4 @@
+import { BASE_NON_NUMBER_VALUE, TILES_PER_VALUE_KEY } from '../config/game.config';
 import type {
   BetDirection,
   BetResult,
@@ -9,8 +10,12 @@ import type {
   WindTile,
 } from '../types/game.types';
 
-export const MAHJONG_COPY_COUNT = 4;
-export const NON_NUMBER_BASE_VALUE = 5;
+/**
+ * Re-exported for backward compatibility. Prefer importing the config constants
+ * directly from `@tile-game/shared` in new code.
+ */
+export const MAHJONG_COPY_COUNT = TILES_PER_VALUE_KEY;
+export const NON_NUMBER_BASE_VALUE = BASE_NON_NUMBER_VALUE;
 
 const SUITS: TileSuit[] = ['bamboo', 'characters', 'dots'];
 const DRAGONS: DragonTile[] = ['red', 'green', 'white'];
@@ -121,7 +126,10 @@ export function calcHandValue(tiles: Tile[], tileValueState: TileValueState = {}
   return tiles.reduce((total, tile) => total + calcTileValue(tile, tileValueState), 0);
 }
 
-export function toHand(tiles: Tile[], tileValueState: TileValueState): { tiles: Tile[]; totalValue: number } {
+export function toHand(
+  tiles: Tile[],
+  tileValueState: TileValueState,
+): { tiles: Tile[]; totalValue: number } {
   return {
     tiles,
     totalValue: calcHandValue(tiles, tileValueState),
@@ -144,6 +152,15 @@ export function evaluateBet(
   return currentHandValue < previousHandValue ? 'correct' : 'incorrect';
 }
 
+/**
+ * Applies the +1 / -1 dynamic scaling rule to non-number tiles in a hand.
+ *
+ * Spec: "Every time a non-number tile is part of a winning hand, that specific
+ * tile value increases by 1. Losing hand decreases by 1." We dedupe by
+ * `valueKey` so a hand that contains two physical copies of the same tile
+ * (e.g. two East Winds — there are four copies in the deck) only shifts that
+ * tile's value by one, not two. Ties leave the state unchanged.
+ */
 export function updateDynamicTileValues(
   tileValueState: TileValueState,
   handTiles: Tile[],
@@ -155,11 +172,14 @@ export function updateDynamicTileValues(
 
   const delta = betResult === 'correct' ? 1 : -1;
   const nextState = { ...tileValueState };
+  const seen = new Set<string>();
 
   for (const tile of handTiles) {
-    if (tile.kind === 'dragon' || tile.kind === 'wind') {
-      nextState[tile.valueKey] = (nextState[tile.valueKey] ?? NON_NUMBER_BASE_VALUE) + delta;
-    }
+    if (tile.kind !== 'dragon' && tile.kind !== 'wind') continue;
+    if (seen.has(tile.valueKey)) continue;
+    seen.add(tile.valueKey);
+
+    nextState[tile.valueKey] = (nextState[tile.valueKey] ?? NON_NUMBER_BASE_VALUE) + delta;
   }
 
   return nextState;

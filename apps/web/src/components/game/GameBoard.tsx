@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { HISTORY_VISIBLE } from '@tile-game/shared';
 import { BetControls } from './BetControls';
 import { GameOverScreen } from './GameOverScreen';
 import { HandHistory } from './HandHistory';
@@ -12,12 +13,21 @@ import { quickFade } from '../../hooks/useAnimations';
 
 export function GameBoard() {
   const router = useRouter();
-  const { gameState, isLoading, error, placeBet, exitGame, startNewGame, clearError } = useGameStore();
+  // Per-slice selectors so unrelated state changes don't re-render the whole board.
+  const gameState = useGameStore((state) => state.gameState);
+  const isLoading = useGameStore((state) => state.isLoading);
+  const error = useGameStore((state) => state.error);
+  const placeBet = useGameStore((state) => state.placeBet);
+  const exitGame = useGameStore((state) => state.exitGame);
+  const startNewGame = useGameStore((state) => state.startNewGame);
+  const clearError = useGameStore((state) => state.clearError);
 
   if (!gameState) {
     return (
       <main className="flex min-h-screen items-center justify-center px-5 text-center">
-        <p className="font-display text-2xl font-bold uppercase text-game-muted">Preparing the table...</p>
+        <p className="font-display text-2xl font-bold uppercase text-game-muted">
+          Preparing the table...
+        </p>
       </main>
     );
   }
@@ -86,7 +96,11 @@ export function GameBoard() {
               role="alert"
             >
               <span>{error}</span>
-              <button aria-label="Dismiss error" onClick={clearError} className="font-display font-bold uppercase">
+              <button
+                aria-label="Dismiss error"
+                onClick={clearError}
+                className="font-display font-bold uppercase"
+              >
                 Clear
               </button>
             </motion.div>
@@ -161,7 +175,8 @@ export function GameBoard() {
               Recent Hands
             </h2>
             <span className="font-display text-[0.65rem] font-bold uppercase tracking-[0.25em] text-game-muted">
-              Last {Math.min(5, gameState.handHistory.length)} of {gameState.handHistory.length}
+              Last {Math.min(HISTORY_VISIBLE, gameState.handHistory.length)} of{' '}
+              {gameState.handsPlayed - 1}
             </span>
           </div>
           <HandHistory entries={gameState.handHistory} />

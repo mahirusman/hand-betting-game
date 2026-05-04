@@ -62,11 +62,11 @@ describe('GameService', () => {
     service = moduleRef.get(GameService);
   });
 
-  it('creates a game with a first hand and 134 remaining Mahjong tiles', async () => {
+  it('creates a game with a first hand and 26 remaining draw tiles', async () => {
     const game = await service.createGame();
     expect(game.score).toBe(0);
     expect(game.currentHand?.tiles).toHaveLength(2);
-    expect(game.drawPileCount).toBe(134);
+    expect(game.drawPileCount).toBe(26);
     expect(game.discardPileCount).toBe(0);
     expect(game.reshuffleCount).toBe(0);
     expect(game.handsPlayed).toBe(1);
@@ -126,7 +126,9 @@ describe('GameService', () => {
 
   it('throws when game is already over', async () => {
     stored = { ...baseGame(), gameOver: true };
-    await expect(service.placeBet(stored.gameId, 'higher')).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.placeBet(stored.gameId, 'higher')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('throws when game is missing', async () => {
@@ -161,8 +163,8 @@ describe('GameService', () => {
   it('ends on third reshuffle', async () => {
     stored = {
       ...baseGame(),
-      drawPile: [findTile('number:bamboo:1')],
-      drawPileCount: 1,
+      drawPile: [],
+      drawPileCount: 0,
       reshuffleCount: 2,
     };
     const game = await service.placeBet(stored.gameId, 'higher');

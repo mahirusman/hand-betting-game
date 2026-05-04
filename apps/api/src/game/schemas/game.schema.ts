@@ -10,8 +10,11 @@ import type {
 } from '@tile-game/shared';
 
 export type GameDocument = HydratedDocument<Game>;
+export type GameDrawStackDocument = HydratedDocument<GameDrawStack>;
+export type GameDiscardStackDocument = HydratedDocument<GameDiscardStack>;
+export type GameHandLedgerDocument = HydratedDocument<GameHandLedger>;
 
-const TileSchema = new MongooseSchema(
+export const TileSchema = new MongooseSchema(
   {
     id: { type: String, required: true },
     valueKey: { type: String, required: true },
@@ -25,7 +28,7 @@ const TileSchema = new MongooseSchema(
   { _id: false },
 );
 
-const HandSchema = new MongooseSchema(
+export const HandSchema = new MongooseSchema(
   {
     tiles: { type: [TileSchema], required: true },
     totalValue: { type: Number, required: true },
@@ -33,7 +36,7 @@ const HandSchema = new MongooseSchema(
   { _id: false },
 );
 
-const HandHistoryEntrySchema = new MongooseSchema(
+export const HandHistoryEntrySchema = new MongooseSchema(
   {
     hand: { type: HandSchema, required: true },
     handIndex: { type: Number, required: true },
@@ -57,15 +60,6 @@ export class Game {
 
   @Prop({ type: HandSchema, default: null })
   previousHand!: Hand | null;
-
-  @Prop({ type: [HandHistoryEntrySchema], default: [] })
-  handHistory!: HandHistoryEntry[];
-
-  @Prop({ type: [TileSchema], required: true })
-  drawPile!: Tile[];
-
-  @Prop({ type: [TileSchema], default: [] })
-  discardPile!: Tile[];
 
   @Prop({ required: true, default: 0 })
   drawPileCount!: number;
@@ -105,3 +99,48 @@ export const GameSchema = SchemaFactory.createForClass(Game);
 GameSchema.index({ gameId: 1 }, { unique: true });
 GameSchema.index({ createdAt: 1 });
 GameSchema.index({ gameOver: 1, score: -1, updatedAt: -1 });
+
+@Schema({ timestamps: true, collection: 'game_draw_stacks' })
+export class GameDrawStack {
+  @Prop({ required: true })
+  gameId!: string;
+
+  @Prop({ type: [TileSchema], required: true, default: [] })
+  tiles!: Tile[];
+
+  @Prop({ type: Date, required: true, expires: 0 })
+  expiresAt!: Date;
+}
+
+export const GameDrawStackSchema = SchemaFactory.createForClass(GameDrawStack);
+GameDrawStackSchema.index({ gameId: 1 }, { unique: true });
+
+@Schema({ timestamps: true, collection: 'game_discard_stacks' })
+export class GameDiscardStack {
+  @Prop({ required: true })
+  gameId!: string;
+
+  @Prop({ type: [TileSchema], required: true, default: [] })
+  tiles!: Tile[];
+
+  @Prop({ type: Date, required: true, expires: 0 })
+  expiresAt!: Date;
+}
+
+export const GameDiscardStackSchema = SchemaFactory.createForClass(GameDiscardStack);
+GameDiscardStackSchema.index({ gameId: 1 }, { unique: true });
+
+@Schema({ timestamps: true, collection: 'game_hand_ledgers' })
+export class GameHandLedger {
+  @Prop({ required: true })
+  gameId!: string;
+
+  @Prop({ type: [HandHistoryEntrySchema], required: true, default: [] })
+  entries!: HandHistoryEntry[];
+
+  @Prop({ type: Date, required: true, expires: 0 })
+  expiresAt!: Date;
+}
+
+export const GameHandLedgerSchema = SchemaFactory.createForClass(GameHandLedger);
+GameHandLedgerSchema.index({ gameId: 1 }, { unique: true });

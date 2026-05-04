@@ -5,8 +5,20 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 @Controller()
 export class AppController {
   @Get('health')
-  @ApiOkResponse({ schema: { example: { status: 'ok' } } })
-  health(): { status: 'ok' } {
-    return { status: 'ok' };
+  @ApiOkResponse({
+    schema: {
+      example: {
+        success: true,
+        data: { status: 'ok' },
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    },
+  })
+  health(): { success: true; data: { status: 'ok' }; timestamp: string } {
+    return {
+      success: true,
+      data: { status: 'ok' },
+      timestamp: new Date().toISOString(),
+    };
   }
 }

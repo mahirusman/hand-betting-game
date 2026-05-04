@@ -2,7 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc/apps/api",
-    "module": "CommonJS"
+    "module": "CommonJS",
+    "rootDir": "../../"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.spec.ts", "test/**/*.ts"]

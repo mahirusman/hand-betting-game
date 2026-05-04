@@ -1,14 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   BetDirection,
-  checkGameOverFromHand,
   checkGameOverFromReshuffle,
+  checkTileValueGameOver,
   createInitialTileValueState,
   dealHand,
   evaluateBet,
+  FRESH_DRAW_PILE_SIZE,
+  GAME_TTL_MS,
   GameState,
   generateFullTileSet,
+  HAND_SIZE,
   HandHistoryEntry,
+  HISTORY_LIMIT,
+  LEADERBOARD_LIMIT,
   LeaderboardEntry,
   PersistedGameState,
   shuffleTiles,
@@ -17,11 +22,6 @@ import {
 } from '@tile-game/shared';
 import { randomUUID } from 'crypto';
 import { GameRepository } from './game.repository';
-import { GameDocument } from './schemas/game.schema';
-
-const HAND_SIZE = 2;
-const HISTORY_LIMIT = 10;
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class GameService {
@@ -30,7 +30,7 @@ export class GameService {
   async createGame(): Promise<GameState> {
     const now = new Date();
     const tileValueState = createInitialTileValueState();
-    const { hand: tiles, remainingPile } = dealHand(shuffleTiles(generateFullTileSet()), HAND_SIZE);
+    const { hand: tiles, remainingPile } = dealHand(this.createFreshDrawPile(), HAND_SIZE);
     const currentHand = toHand(tiles, tileValueState);
 
     const game = await this.repository.create({
@@ -51,7 +51,7 @@ export class GameService {
       lastBetResult: null,
       createdAt: now,
       updatedAt: now,
-      expiresAt: new Date(now.getTime() + ONE_DAY_MS),
+      expiresAt: new Date(now.getTime() + GAME_TTL_MS),
     });
 
     return this.toGameState(game);
@@ -87,8 +87,8 @@ export class GameService {
     let gameOver = false;
     let gameOverReason = game.gameOverReason;
 
-    if (drawPile.length < HAND_SIZE) {
-      drawPile = shuffleTiles([...drawPile, ...discardPile, ...generateFullTileSet()]);
+    if (drawPile.length === 0) {
+      drawPile = shuffleTiles([...discardPile, ...this.createFreshDrawPile()]);
       discardPile = [];
       reshuffleCount += 1;
     }
@@ -96,20 +96,39 @@ export class GameService {
     const reshuffleGameOver = checkGameOverFromReshuffle(reshuffleCount);
     const { hand: nextTiles, remainingPile } = dealHand(drawPile, HAND_SIZE);
     const previousHand = game.currentHand;
-    const preScaleCurrentHand = toHand(nextTiles, game.tileValueState);
-    const betResult = evaluateBet(bet, previousHand.totalValue, preScaleCurrentHand.totalValue);
-    const tileValueState = updateDynamicTileValues(game.tileValueState, nextTiles, betResult);
+
+    /*
+     * Two-stage bet evaluation. The provisional pass uses the tile state that
+     * was active when the player placed their bet. We then apply the dynamic
+     * +1/-1 scaling and re-evaluate the bet against the post-scale hand value
+     * so the outcome the player sees ("previous 10, current 12 → ✓ Higher")
+     * always agrees with the displayed numbers.
+     *
+     * In rare boundary cases — a non-number tile flipping the comparison — the
+     * provisional and final results can differ. The scaling delta has already
+     * been applied based on the provisional read; we treat the post-scale
+     * value as the authoritative outcome for scoring and game-over checks.
+     */
+    const provisionalHand = toHand(nextTiles, game.tileValueState);
+    const provisionalResult = evaluateBet(bet, previousHand.totalValue, provisionalHand.totalValue);
+    const tileValueState = updateDynamicTileValues(
+      game.tileValueState,
+      nextTiles,
+      provisionalResult,
+    );
     const currentHand = toHand(nextTiles, tileValueState);
-    const handGameOver = checkGameOverFromHand(nextTiles, tileValueState);
+    const betResult = evaluateBet(bet, previousHand.totalValue, currentHand.totalValue);
+
+    const tileGameOver = checkTileValueGameOver(nextTiles, tileValueState);
 
     if (reshuffleGameOver) {
       gameOver = true;
       gameOverReason = 'max_reshuffles';
     }
 
-    if (handGameOver.isGameOver) {
+    if (tileGameOver.isGameOver) {
       gameOver = true;
-      gameOverReason = handGameOver.reason;
+      gameOverReason = tileGameOver.reason;
     }
 
     const historyEntry: HandHistoryEntry = {
@@ -143,18 +162,11 @@ export class GameService {
     return this.toGameState(updated);
   }
 
-  async getLeaderboard(limit = 5): Promise<LeaderboardEntry[]> {
-    const games = await this.repository.findTopScores(limit);
-    return games.map((game) => ({
-      gameId: game.gameId,
-      score: game.score,
-      handsPlayed: game.handsPlayed,
-      gameOverReason: game.gameOverReason,
-      completedAt: game.updatedAt,
-    }));
+  async getLeaderboard(limit = LEADERBOARD_LIMIT): Promise<LeaderboardEntry[]> {
+    return this.repository.findTopScores(limit);
   }
 
-  private toGameState(game: GameDocument | PersistedGameState): GameState {
+  private toGameState(game: PersistedGameState): GameState {
     return {
       gameId: game.gameId,
       score: game.score,
@@ -172,5 +184,9 @@ export class GameService {
       createdAt: game.createdAt,
       updatedAt: game.updatedAt,
     };
+  }
+
+  private createFreshDrawPile() {
+    return shuffleTiles(generateFullTileSet()).slice(0, FRESH_DRAW_PILE_SIZE);
   }
 }

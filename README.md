@@ -1,26 +1,32 @@
 # Mahjong Hand Betting
 
-A full-stack Nx monorepo for a dark casino-style Mahjong hand betting game.
+A full-stack Nx monorepo for a dark casino-style hand-betting game played with a Mahjong deck. The player is dealt a hand, sees its total value, and bets whether the next hand will be **higher** or **lower**. Non-number tiles dynamically scale up or down with each correct or incorrect bet, and the game ends when any tile crosses 0 or 10 — or when the deck has been reshuffled three times.
+
+---
 
 ## Stack
 
-- Nx monorepo with `api`, `web`, and `shared` projects
-- NestJS 10, MongoDB/Mongoose, Swagger, validation, throttling
-- Next.js 14 App Router, Tailwind CSS, Framer Motion, Zustand
-- Shared TypeScript game engine exported as `@tile-game/shared`
+- Nx 19 monorepo with `api`, `web`, and `shared` projects
+- **API** — NestJS 10, MongoDB/Mongoose, Swagger, validation, rate-limiting
+- **Web** — Next.js 14 App Router, Tailwind CSS, Framer Motion, Zustand
+- **Shared** — TypeScript game engine + types, published as `@tile-game/shared`
+
+The shared library owns every game rule (tile generation, shuffling, dealing, bet evaluation, dynamic tile-value scaling, game-over checks). The API and web apps are thin layers on top of it.
+
+---
 
 ## Getting Started
 
 ```bash
 npm install
 cp .env.example .env
-npm run dev:api
-npm run dev:web
+npm run dev:api   # http://localhost:3001/api
+npm run dev:web   # http://localhost:3000
 ```
 
-The web app runs at `http://localhost:3000`, the API at `http://localhost:3001/api`, and Swagger at `http://localhost:3001/api/docs`.
+Swagger docs live at `http://localhost:3001/api/docs`.
 
-## Environment
+### Environment
 
 ```bash
 MONGODB_URI=mongodb+srv://USER:PASSWORD@YOUR_CLUSTER.mongodb.net/tile-game?appName=Cluster0
@@ -30,15 +36,131 @@ FRONTEND_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
 
+The API requires a reachable MongoDB instance — either Atlas or a local Mongo — because the leaderboard and game state are persisted there.
+
+---
+
 ## Commands
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build:api:docker
-npm run build:web:docker
+npm run dev               # Run API + web together via Nx
+npm run dev:api           # API only
+npm run dev:web           # Web only
+npm run lint              # ESLint across api, web, shared
+npm run typecheck         # tsc --noEmit per project
+npm test                  # shared (vitest) + api (jest) + web (vitest)
+npm run build             # Nx run-many -t build
+npm run build:api:docker  # Production API bundle for the Docker image
+npm run build:web:docker  # Production Next.js standalone bundle
+npm run format            # Prettier via nx format:write
 ```
+
+---
+
+## Game Rules
+
+**Setup**
+
+- A fresh draw pile contains 28 tiles drawn from a freshly shuffled 136-tile Mahjong deck (3 suits × 9 face values × 4 copies, plus 4 copies each of 3 dragons and 4 winds).
+- Number tiles are worth their face value. Dragons and winds start at value **5**.
+- The first hand (2 tiles) is dealt automatically when a game starts.
+
+**Each turn**
+
+1. The player sees the current hand's tiles and total value.
+2. They press **Bet Higher** or **Bet Lower** to predict the next hand.
+3. The next 2 tiles are dealt; the previous hand is discarded.
+4. The bet is evaluated against the new hand's total value:
+   - Higher than previous → "higher" wins.
+   - Lower than previous → "lower" wins.
+   - Equal → tie.
+5. **Dynamic scaling**: every non-number tile in the new hand has its value `+1` on a winning bet and `-1` on a losing bet. Ties leave values untouched. Duplicate tiles within a single hand only shift their shared value once (the spec says "+1 per winning hand", not per copy).
+6. Score increments by 1 for a correct bet.
+
+**Reshuffling**
+
+- When the draw pile is empty, the contents of the discard pile are merged with a fresh 28-tile draw, shuffled, and used as the new draw pile. The reshuffle counter increments.
+
+**Game over**
+
+- A tile value reaches **0** (any non-number tile, even one not currently in hand).
+- A tile value reaches **10** (same scope).
+- The draw pile has been reshuffled for the **3rd** time.
+
+All thresholds live in `libs/shared/src/config/game.config.ts`.
+
+---
+
+## Architecture Overview
+
+```
+.
+├── apps
+│   ├── api        NestJS HTTP layer + Mongo persistence
+│   └── web        Next.js App Router UI
+└── libs
+    └── shared     Pure game engine + shared types and config
+```
+
+**`libs/shared`** is the source of truth. It exports:
+
+- `config/game.config.ts` — every tunable constant (`HAND_SIZE`, `FRESH_DRAW_PILE_SIZE`, `MAX_RESHUFFLES`, `BASE_NON_NUMBER_VALUE`, `GAME_OVER_LOW`/`HIGH`, `LEADERBOARD_LIMIT`, `HISTORY_LIMIT`, `HISTORY_VISIBLE`, `BET_DIRECTIONS`).
+- `utils/tile-engine.ts` — `generateFullTileSet`, `shuffleTiles`, `dealHand`, `calcTileValue`, `evaluateBet`, `updateDynamicTileValues`.
+- `utils/game-rules.ts` — `checkGameOverFromHand`, `checkGameOverFromTileValueState`, `checkTileValueGameOver`, `checkGameOverFromReshuffle`.
+- `types/game.types.ts` and `types/api.types.ts`.
+
+**`apps/api`** owns one stateful flow: `GameService.placeBet`. It re-shuffles when needed, calls into the shared engine for the bet/scaling/game-over math, persists the new state via `GameRepository`, and returns the projected `GameState` to the client. Pure logic stays out of the controllers.
+
+**`apps/web`** is presentational. A Zustand store (`useGame.ts`) holds the latest `GameState` and exposes `startNewGame`, `placeBet`, `exitGame`, `clearError`. Components (`GameBoard`, `TileDisplay`, `BetControls`, `HandHistory`, `GameOverScreen`, `LandingPage`, `LeaderboardCard`) render the store state.
+
+---
+
+## API
+
+```
+POST  /api/games                  Create a new game
+GET   /api/games/:gameId          Fetch an existing game
+POST  /api/games/:gameId/bet      Place a higher/lower bet
+GET   /api/games/leaderboard      Top 5 finished games by score
+GET   /api/health                 Liveness probe
+```
+
+All success responses are wrapped in:
+
+```json
+{
+  "success": true,
+  "data": { "...": "GameState or LeaderboardEntry[]" },
+  "timestamp": "2026-05-04T00:00:00.000Z"
+}
+```
+
+Errors share a parallel envelope:
+
+```json
+{
+  "success": false,
+  "error": { "code": "GAME_NOT_FOUND", "message": "Game not found." },
+  "timestamp": "2026-05-04T00:00:00.000Z"
+}
+```
+
+Error codes: `GAME_OVER`, `GAME_NOT_FOUND`, `INVALID_BET`, `VALIDATION_ERROR`, `INTERNAL_ERROR`.
+
+---
+
+## Testing
+
+```bash
+npm test              # all suites
+npm run test:shared   # vitest, libs/shared
+npm run test:api      # jest, apps/api
+npm run test:web      # vitest, apps/web
+```
+
+The shared engine has unit coverage for tile generation, shuffling, dealing, bet evaluation, dynamic scaling (including duplicate non-number tiles in a hand), and every game-over path. The API has controller/service/e2e specs; the web has component specs (`MahjongTile`, `BetControls`, `GameOverScreen`) and a hook spec for the Zustand store.
+
+---
 
 ## Docker
 
@@ -46,22 +168,14 @@ npm run build:web:docker
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Production compose uses `.env` for the API and builds `tile-game-api` and `tile-game-web`.
+Production compose builds `tile-game-api` and `tile-game-web`. It does **not** run MongoDB or Nginx — MongoDB is expected to be an external Atlas instance reached through `MONGODB_URI`, and Nginx is host-installed (config in `nginx/default.conf`). The API and web containers bind to localhost only:
 
-It does **not** run MongoDB or Nginx in Docker. MongoDB is expected to be an external Atlas/live database through `MONGODB_URI`. The API and web containers bind to localhost only:
-
-```text
+```
 127.0.0.1:3000 -> web
 127.0.0.1:3001 -> api
 ```
 
-Only the API container receives `MONGODB_URI`. The web container receives only public frontend environment values.
-
-```bash
-docker compose up --build -d
-```
-
-For a Google Cloud VM with host-installed Nginx and no domain, copy the provided Nginx config to the server Nginx config directory:
+For a Google Cloud VM with host-installed Nginx and no domain, copy the provided config:
 
 ```bash
 sudo cp nginx/default.conf /etc/nginx/conf.d/tile-game.conf
@@ -69,94 +183,57 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Open firewall ingress for TCP `80`, then visit:
+Open firewall ingress for TCP `80`, then visit `http://YOUR_PUBLIC_IP/`. Behind Nginx, leave `NEXT_PUBLIC_API_URL=` empty so browser requests use the same public IP.
 
-```text
-http://YOUR_PUBLIC_IP/
-http://YOUR_PUBLIC_IP/api/health
-http://YOUR_PUBLIC_IP/api/docs
-```
+---
 
-Nginx config lives in `nginx/default.conf`. It routes `/api/*` to `127.0.0.1:3001` and everything else to `127.0.0.1:3000`.
+## CI / Deployment
 
-For production behind Nginx, leave `NEXT_PUBLIC_API_URL` empty so browser requests use the same public IP:
+CI runs on pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-```bash
-NEXT_PUBLIC_API_URL=
-```
-
-## API
-
-- `POST /api/games`
-- `GET /api/games/:gameId`
-- `POST /api/games/:gameId/bet`
-- `GET /api/health`
-
-All game responses are wrapped in:
-
-```json
-{
-  "success": true,
-  "data": {},
-  "timestamp": "2026-05-02T00:00:00.000Z"
-}
-```
-
-## Branch Protection
-
-For `main`, enable:
-
-- Require pull request before merging
-- Require at least 1 approval
-- Require status checks to pass, including the `ci` workflow
-- Block direct pushes to `main`
-
-## GitHub Actions Deployment
-
-This project deploys with a **GitHub self-hosted runner** installed on the Google Cloud server. There is no GHCR image push and no SSH step. The runner checks out the repo on the server and runs Docker Compose locally.
-
-Required server setup:
-
-```bash
-docker --version
-docker compose version
-```
-
-Install the GitHub self-hosted runner from:
-
-```text
-GitHub repo -> Settings -> Actions -> Runners -> New self-hosted runner
-```
-
-The runner user must be able to run Docker:
-
-```bash
-sudo usermod -aG docker $USER
-```
-
-Log out and back in after adding the Docker group, or restart the runner service.
+Deployment uses a **GitHub self-hosted runner** installed on the Google Cloud VM. The workflow ([`deploy.yml`](.github/workflows/deploy.yml)) checks out the repo on the server, writes `.env` from secrets, and runs `docker compose up --build -d`.
 
 Required GitHub secrets:
 
 ```text
 MONGODB_URI          # Atlas connection string
-FRONTEND_URL         # Example: http://YOUR_PUBLIC_IP
-NEXT_PUBLIC_API_URL  # Leave empty when host Nginx proxies /api on the same public IP
+FRONTEND_URL         # http://YOUR_PUBLIC_IP
+NEXT_PUBLIC_API_URL  # Empty when host Nginx proxies /api on the same IP
 ```
 
-Deployment flow:
+Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
 
-```text
-push to main
--> self-hosted runner checks out repo
--> writes .env from GitHub secrets
--> docker compose up --build -d
--> checks http://127.0.0.1:3001/api/health
--> checks http://127.0.0.1:3000
-```
+---
 
-The deploy workflow is [deploy.yml](.github/workflows/deploy.yml). CI for pull requests is [ci.yml](.github/workflows/ci.yml).
+## AI usage note
 
-## Notes
+This project was written with AI assistance (Anthropic's Claude). The split is roughly:
 
-The shared library owns all tile math and game rule checks. API and web code import from `@tile-game/shared` instead of duplicating game logic.
+- **Handwritten / human-led**: project structure, Nx workspace setup, Docker + Nginx + GitHub Actions wiring, Mongoose schema design, casino dark-table visual direction (gold accents, glass-card, tile typography), copy decisions ("Hall of fame", "Dealing…", etc.).
+- **AI-assisted**: scaffolding the NestJS modules, the initial Tailwind component layouts, the game-engine and rules functions, the Zustand store, Vitest/Jest tests, and large parts of this README. Every AI-generated file was read, edited, and reviewed by hand before commit.
+- **AI-driven review pass**: a final audit (this PR) caught a tile-scaling double-count when a hand contains duplicate non-number tiles, a mismatch between the displayed hand value and the value used to evaluate the bet, and a missing global tile-value game-over check. Those fixes are documented in the commit history.
+
+---
+
+## Video walkthrough
+
+The submission ships with a short screen recording covering:
+
+1. Landing page — hero, tile preview, leaderboard.
+2. Starting a new game and reading a hand.
+3. Placing a bet, watching the result animation, and seeing dynamic scaling on a dragon/wind tile.
+4. Triggering a reshuffle by playing through the draw pile.
+5. Hitting a game-over via a tile reaching 0 or 10, and the end-game summary.
+6. A quick tour of `libs/shared` to show the engine + config separation.
+
+The recording lives alongside the repo at submission time (link in the submission form).
+
+---
+
+## Known limitations
+
+- **MongoDB Atlas required.** The leaderboard and game state are persisted in Mongo. There is no localStorage fallback; without a reachable database the API will refuse to boot.
+- **Single-player only.** No auth, no game-ownership checks. Anyone with a `gameId` can place bets on it. Acceptable for a single-user demo, would need session/auth for multiplayer.
+- **No optimistic locking on bets.** `findById` then `findOneAndUpdate` is a check-then-write; two simultaneous bets on the same `gameId` race. Not exploitable in normal play but worth a Mongoose `version` field if multiplayer ships.
+- **Edge case in bet evaluation.** When dynamic scaling would push the new hand's value past the comparison threshold (e.g. previous=10, pre-scale=11, "lower" bet causes -1, post-scale=10), the official result is the post-scale comparison so the displayed values always agree with the verdict. The provisional and final bet results can therefore disagree in rare boundary cases; the post-scale result is authoritative.
+- **History cap of 10 on the server.** The UI shows the last 5; older entries beyond 10 are dropped.

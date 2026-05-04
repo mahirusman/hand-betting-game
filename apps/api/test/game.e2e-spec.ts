@@ -33,7 +33,7 @@ const game = {
   },
   previousHand: null,
   handHistory: [],
-  drawPileCount: 134,
+  drawPileCount: 26,
   discardPileCount: 0,
   reshuffleCount: 0,
   tileValueState: {
@@ -96,7 +96,7 @@ describe('Game API e2e', () => {
     const response = await request(app.getHttpServer()).post('/api/games').send({}).expect(201);
     expect(response.body.success).toBe(true);
     expect(response.body.data.currentHand.tiles).toHaveLength(2);
-    expect(response.body.data.drawPileCount).toBe(134);
+    expect(response.body.data.drawPileCount).toBe(26);
   });
 
   it('GET /api/games/:gameId returns a game', async () => {
@@ -132,7 +132,10 @@ describe('Game API e2e', () => {
 
   it('POST /api/games/:gameId/bet returns 404 for unknown game', async () => {
     const unknown = '11111111-1111-4111-8111-111111111111';
-    await request(app.getHttpServer()).post(`/api/games/${unknown}/bet`).send({ bet: 'lower' }).expect(404);
+    await request(app.getHttpServer())
+      .post(`/api/games/${unknown}/bet`)
+      .send({ bet: 'lower' })
+      .expect(404);
   });
 
   it('POST /api/games/:gameId/bet returns GAME_OVER', async () => {
@@ -145,6 +148,9 @@ describe('Game API e2e', () => {
   });
 
   it('GET /api/health returns ok', async () => {
-    await request(app.getHttpServer()).get('/api/health').expect(200, { status: 'ok' });
+    const response = await request(app.getHttpServer()).get('/api/health').expect(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data).toEqual({ status: 'ok' });
+    expect(typeof response.body.timestamp).toBe('string');
   });
 });

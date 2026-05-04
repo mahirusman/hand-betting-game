@@ -10,7 +10,7 @@ describe('GameController', () => {
       currentHand: null,
       previousHand: null,
       handHistory: [],
-      drawPileCount: 134,
+      drawPileCount: 26,
       discardPileCount: 0,
       reshuffleCount: 0,
       tileValueState: {},

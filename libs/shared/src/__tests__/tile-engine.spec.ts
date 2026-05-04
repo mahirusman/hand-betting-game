@@ -12,7 +12,8 @@ import {
 } from '../utils/tile-engine';
 
 const tileKey = (tile: Tile) => tile.id;
-const findTile = (valueKey: string) => generateFullTileSet().find((tile) => tile.valueKey === valueKey)!;
+const findTile = (valueKey: string) =>
+  generateFullTileSet().find((tile) => tile.valueKey === valueKey)!;
 
 describe('tile engine', () => {
   describe('generateFullTileSet', () => {
@@ -97,6 +98,21 @@ describe('tile engine', () => {
     const redDragon = findTile('dragon:red');
     const initial = createInitialTileValueState();
     expect(updateDynamicTileValues(initial, [redDragon], 'tie')).toEqual(initial);
+  });
+
+  it('only shifts a non-number tile value by one even when the hand has duplicates', () => {
+    // The deck contains four copies of every non-number tile, so a 2-tile hand
+    // can legitimately hold two East Winds. The spec is "+1 per winning hand",
+    // not per physical copy.
+    const eastWindA: Tile = { ...findTile('wind:east'), id: 'wind:east#1' };
+    const eastWindB: Tile = { ...findTile('wind:east'), id: 'wind:east#2' };
+    const initial = createInitialTileValueState();
+
+    const afterWin = updateDynamicTileValues(initial, [eastWindA, eastWindB], 'correct');
+    expect(afterWin['wind:east']).toBe(6);
+
+    const afterLoss = updateDynamicTileValues(initial, [eastWindA, eastWindB], 'incorrect');
+    expect(afterLoss['wind:east']).toBe(4);
   });
 
   describe('evaluateBet', () => {

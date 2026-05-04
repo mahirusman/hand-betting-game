@@ -13,7 +13,7 @@
     "lib": ["ES2021", "DOM"],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@tile-game/shared": ["libs/shared/src/index.ts"]
