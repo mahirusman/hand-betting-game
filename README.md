@@ -6,12 +6,21 @@ A full-stack Nx monorepo for a dark casino-style hand-betting game played with a
 
 ## Stack
 
-- Nx 19 monorepo with `api`, `web`, and `shared` projects
-- **API** — NestJS 10, MongoDB/Mongoose, Swagger, validation, rate-limiting
-- **Web** — Next.js 14 App Router, Tailwind CSS, Framer Motion, Zustand
+- Nx 22 monorepo with `api`, `web`, and `shared` projects
+- **API** — NestJS 11, MongoDB/Mongoose, Swagger, validation, rate-limiting
+- **Web** — Next.js 16 App Router, React 19, Tailwind CSS 4, Framer Motion, Zustand
 - **Shared** — TypeScript game engine + types, published as `@tile-game/shared`
+- **AI workflow** — Codex is initialized as the repository AI coding agent, with Nx-aware agent guidance and Git/GitHub change tracking.
 
 The shared library owns every game rule (tile generation, shuffling, dealing, bet evaluation, dynamic tile-value scaling, game-over checks). The API and web apps are thin layers on top of it.
+
+---
+
+## AI Agent Workflow
+
+Codex is the primary AI agent for this repository. It should read [`AGENTS.md`](AGENTS.md) before editing, preserve the Nx monorepo boundaries, and use Git status/diffs to track uncommitted work before making changes.
+
+Nx helper prompts and skills are included for agent-assisted workspace navigation and CI monitoring. When CI is connected through GitHub and Nx Cloud, Codex can help inspect failing checks, propose or apply fixes, and prepare a clear commit message without committing changes unless explicitly asked.
 
 ---
 
@@ -20,14 +29,10 @@ The shared library owns every game rule (tile generation, shuffling, dealing, be
 ```bash
 npm install
 cp .env.example .env
-npm run dev:web   # Start the web app at http://localhost:3000
-```
-
-temp fix:Stop the web-only process, then start both apps together:
-
-```bash
 npm run dev       # Starts the API and web app together
 ```
+
+For web-only UI work, use `npm run dev:web`.
 
 Swagger docs live at `http://localhost:3001/api/docs`.
 

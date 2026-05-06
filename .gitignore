@@ -7,3 +7,6 @@ coverage
 tmp
 *.log
 .nx
+
+.claude/worktrees
+.claude/settings.local.json

@@ -1,9 +1,11 @@
 <!-- BEGIN:tile-game-agent-rules -->
+
 # Tile Game Agent Rules
 
 This repository is a full-stack **Mahjong Hand Betting** game. It is an Nx-style monorepo with a NestJS API, a Next.js App Router frontend, and a shared TypeScript game engine.
 
-Before editing, read this file and keep the architecture intact.
+Codex is initialized as the primary AI coding agent for this repository. Before editing, read this file, inspect Git status for uncommitted user work, and keep the architecture intact.
+
 <!-- END:tile-game-agent-rules -->
 
 ## Project Structure
@@ -134,6 +136,14 @@ npx nx build api
 npx nx build web
 ```
 
+## Codex Agent Workflow
+
+- Treat Codex as the repository AI agent for implementation, documentation, GitHub-assisted review, and CI follow-up.
+- Before changing files, inspect `git status` and relevant diffs; do not overwrite or revert uncommitted user changes unless explicitly asked.
+- Use Git/GitHub context to track changed files, review pending work, and prepare commit messages. Do not commit, push, or open a pull request unless the user asks.
+- Prefer Nx-aware commands and helper guidance for project discovery, builds, tests, and CI monitoring.
+- When package upgrades introduce framework migration issues, update the related config/code in the same patch and verify with targeted commands.
+
 ## Shared Library Rules
 
 All game-domain logic belongs in `libs/shared`.
@@ -166,6 +176,7 @@ Required shared exports:
 ```ts
 export * from './types/game.types';
 export * from './types/api.types';
+export * from './config/game.config';
 export * from './utils/tile-engine';
 export * from './utils/game-rules';
 ```
@@ -289,7 +300,7 @@ Valid error codes:
 
 ## Frontend Rules
 
-The frontend is Next.js 14 with the App Router.
+The frontend is Next.js 16 with the App Router.
 
 Routes:
 
@@ -545,3 +556,27 @@ npm run build
 ```
 
 If dependencies are not installed or network access prevents installation, say that clearly and list what was verified statically.
+
+<!-- nx configuration start-->
+<!-- Leave the start & end comments to automatically receive updates. -->
+
+## General Guidelines for working with Nx
+
+- For navigating/exploring the workspace, invoke the `nx-workspace` skill first - it has patterns for querying projects, targets, and dependencies
+- When running tasks (for example build, lint, test, e2e, etc.), always prefer running the task through `nx` (i.e. `nx run`, `nx run-many`, `nx affected`) instead of using the underlying tooling directly
+- Prefix nx commands with the workspace's package manager (e.g., `pnpm nx build`, `npm exec nx test`) - avoids using globally installed CLI
+- You have access to the Nx MCP server and its tools, use them to help the user
+- For Nx plugin best practices, check `node_modules/@nx/<plugin>/PLUGIN.md`. Not all plugins have this file - proceed without it if unavailable.
+- NEVER guess CLI flags - always check nx_docs or `--help` first when unsure
+
+## Scaffolding & Generators
+
+- For scaffolding tasks (creating apps, libs, project structure, setup), ALWAYS invoke the `nx-generate` skill FIRST before exploring or calling MCP tools
+
+## When to use nx_docs
+
+- USE for: advanced config options, unfamiliar flags, migration guides, plugin configuration, edge cases
+- DON'T USE for: basic generator syntax (`nx g @nx/react:app`), standard commands, things you already know
+- The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
+
+<!-- nx configuration end-->

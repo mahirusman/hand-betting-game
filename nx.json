@@ -30,5 +30,6 @@
       "inputs": ["production", "^production"],
       "cache": true
     }
-  }
+  },
+  "analytics": true
 }
