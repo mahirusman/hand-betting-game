@@ -186,6 +186,8 @@ The shared engine has unit coverage for tile generation, shuffling, dealing, bet
 
 ## Docker
 
+Deployment and VM setup steps are documented in [`nginx/DEPLOYMENT.md`](nginx/DEPLOYMENT.md).
+
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
@@ -212,6 +214,8 @@ Open firewall ingress for TCP `80`, then visit `http://YOUR_PUBLIC_IP/`. Behind 
 ## CI / Deployment
 
 CI runs on pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+For the live Google Cloud deployment steps and verification commands, see [`nginx/DEPLOYMENT.md`](nginx/DEPLOYMENT.md).
 
 Deployment uses a **GitHub self-hosted runner** installed on the Google Cloud VM. The workflow ([`deploy.yml`](.github/workflows/deploy.yml)) checks out the repo on the server, writes `.env` from secrets, and runs `docker compose up --build -d`.
 
