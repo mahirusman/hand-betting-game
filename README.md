@@ -26,9 +26,13 @@ Nx helper prompts and skills are included for agent-assisted workspace navigatio
 
 ## Getting Started
 
+### Project Setup
+
 ```bash
-npm install
+git clone git@github.com:mahirusman/hand-betting-game.git
+cd hand-betting-game
 cp .env.example .env
+npm i -f
 npm run dev       # Starts the API and web app together
 ```
 
