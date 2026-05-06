@@ -4,6 +4,14 @@ A full-stack Nx monorepo for a dark casino-style hand-betting game played with a
 
 ---
 
+## Live Deployment
+
+- **Frontend:** [http://34.27.190.15/](http://34.27.190.15/)
+- **Backend health:** [http://34.27.190.15/api/health](http://34.27.190.15/api/health)
+- **API docs:** [http://34.27.190.15/api/docs](http://34.27.190.15/api/docs)
+
+---
+
 ## Stack
 
 - Nx 22 monorepo with `api`, `web`, and `shared` projects
