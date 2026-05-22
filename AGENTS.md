@@ -527,7 +527,7 @@ Rules:
 - Keep root `buildspec.yml` as the CodeBuild buildspec.
 - Keep ECR repositories as `tile-game-api` and `tile-game-web` unless `aws/CODEPIPELINE.md` is updated at the same time.
 - Keep ECS container names as `api` and `web`; they must match `buildspec.yml`, `imagedefinitions.json`, and the ECS task definition.
-- Keep MongoDB external and provide `MONGODB_URI` through SSM Parameter Store or Secrets Manager.
+- Keep MongoDB external and provide `MONGODB_URI` through AWS SSM Parameter Store as a `SecureString`.
 - Use an Application Load Balancer for public traffic:
   - `/` routes to the web target group on port `3000`.
   - `/api/*` routes to the API target group on port `3001`.

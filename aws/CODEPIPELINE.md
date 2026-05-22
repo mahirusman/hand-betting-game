@@ -29,7 +29,7 @@ This is the production deployment path for the repository.
 - One Application Load Balancer:
   - default route forwards to the `web` target group on port `3000`
   - `/api/*` forwards to the `api` target group on port `3001`
-- External MongoDB, supplied to ECS through SSM Parameter Store or Secrets Manager.
+- External MongoDB, supplied to ECS through AWS SSM Parameter Store.
 
 Using one ECS task with both containers lets the standard CodePipeline ECS deploy action update both images from one `imagedefinitions.json` artifact.
 
@@ -167,13 +167,22 @@ The CodeBuild service role needs permissions like:
 
 ## ECS Runtime Configuration
 
-Store MongoDB as a secure parameter or secret:
+Store MongoDB in AWS SSM Parameter Store as a `SecureString`:
 
 ```bash
 aws ssm put-parameter \
   --name /tile-game/prod/MONGODB_URI \
   --type SecureString \
   --value 'mongodb+srv://USER:PASSWORD@YOUR_CLUSTER.mongodb.net/tile-game?appName=Cluster0'
+```
+
+Use the parameter ARN in `aws/ecs-task-definition.example.json`:
+
+```json
+{
+  "name": "MONGODB_URI",
+  "valueFrom": "arn:aws:ssm:<region>:<account-id>:parameter/tile-game/prod/MONGODB_URI"
+}
 ```
 
 The ECS task execution role needs permission to read that parameter and write logs:

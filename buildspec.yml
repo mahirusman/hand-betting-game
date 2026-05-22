@@ -1,38 +1,73 @@
 version: 0.2
 
+# CodeBuild uses this buildspec to build both application containers, push them
+# to ECR, and produce imagedefinitions.json for the ECS deploy action.
 env:
   shell: bash
   variables:
+    # These names must match the ECR repositories created in AWS.
     ECR_API_REPOSITORY: tile-game-api
     ECR_WEB_REPOSITORY: tile-game-web
+    # Rolling tag that always points to the latest successful develop build.
     IMAGE_TAG_ALIAS: develop-latest
+    # Leave empty when the ALB serves web and /api from the same domain.
     NEXT_PUBLIC_API_URL: ''
 
 phases:
+  # Prepare build variables and authenticate Docker with Amazon ECR.
   pre_build:
     commands:
+      - echo "=== Pre-build phase started ==="
+      - echo "Preparing AWS region, account id, image tags, and ECR repository URLs."
       - set -euo pipefail
       - AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION}}"
+      - echo "Using AWS region: ${AWS_REGION}"
       - AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
+      - echo "Using AWS account id: ${AWS_ACCOUNT_ID}"
       - IMAGE_TAG="${IMAGE_TAG:-${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}}"
       - IMAGE_TAG="${IMAGE_TAG:0:12}"
+      - echo "Using immutable image tag: ${IMAGE_TAG}"
+      - echo "Using rolling image tag alias: ${IMAGE_TAG_ALIAS}"
       - API_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_API_REPOSITORY}"
       - WEB_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_WEB_REPOSITORY}"
+      - echo "API image repository URI: ${API_REPOSITORY_URI}"
+      - echo "Web image repository URI: ${WEB_REPOSITORY_URI}"
+      - echo "Logging in to Amazon ECR so Docker can push images."
       - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - echo "ECR login completed."
+  # Build Docker images for the NestJS API and Next.js web app.
   build:
     commands:
+      - echo "=== Build phase started ==="
+      - echo "Building API Docker image from apps/api/Dockerfile."
       - docker build -f apps/api/Dockerfile -t "${API_REPOSITORY_URI}:${IMAGE_TAG}" -t "${API_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}" .
+      - echo "API Docker image built and tagged as ${IMAGE_TAG} and ${IMAGE_TAG_ALIAS}."
+      - echo "Building Web Docker image from apps/web/Dockerfile."
+      - echo "NEXT_PUBLIC_API_URL will be baked into the Next.js build as: ${NEXT_PUBLIC_API_URL}"
       - docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" -t "${WEB_REPOSITORY_URI}:${IMAGE_TAG}" -t "${WEB_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}" .
+      - echo "Web Docker image built and tagged as ${IMAGE_TAG} and ${IMAGE_TAG_ALIAS}."
+  # Push built images to ECR and create the ECS deployment artifact.
   post_build:
     commands:
+      - echo "=== Post-build phase started ==="
+      - echo "Pushing API image with immutable tag ${IMAGE_TAG} to ECR."
       - docker push "${API_REPOSITORY_URI}:${IMAGE_TAG}"
+      - echo "Pushing API image with rolling tag ${IMAGE_TAG_ALIAS} to ECR."
       - docker push "${API_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}"
+      - echo "Pushing Web image with immutable tag ${IMAGE_TAG} to ECR."
       - docker push "${WEB_REPOSITORY_URI}:${IMAGE_TAG}"
+      - echo "Pushing Web image with rolling tag ${IMAGE_TAG_ALIAS} to ECR."
       - docker push "${WEB_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}"
+      - echo "Creating imagedefinitions.json for the CodePipeline ECS deploy action."
+      - echo "The container names here must match the ECS task definition container names: api and web."
       - printf '[{"name":"api","imageUri":"%s"},{"name":"web","imageUri":"%s"}]' "${API_REPOSITORY_URI}:${IMAGE_TAG}" "${WEB_REPOSITORY_URI}:${IMAGE_TAG}" > imagedefinitions.json
+      - echo "Generated imagedefinitions.json:"
       - cat imagedefinitions.json
+      - echo "Buildspec completed successfully. CodePipeline can now deploy these images to ECS."
 
 artifacts:
+  # CodePipeline reads imagedefinitions.json in the ECS deploy stage.
   files:
     - imagedefinitions.json
+    # Included for reference/debugging in the build artifact.
     - aws/ecs-task-definition.example.json

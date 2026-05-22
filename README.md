@@ -44,7 +44,7 @@ The root [`buildspec.yml`](buildspec.yml) builds both Docker images, pushes them
 Required AWS runtime configuration:
 
 ```text
-MONGODB_URI        Stored in SSM Parameter Store or Secrets Manager
+MONGODB_URI        Stored in AWS SSM Parameter Store as a SecureString
 FRONTEND_URL       Public app URL used by API CORS
 NEXT_PUBLIC_API_URL Build-time web API base URL, empty for same-origin ALB routing
 ```
