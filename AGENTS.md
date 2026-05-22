@@ -14,8 +14,10 @@ Codex is initialized as the primary AI coding agent for this repository. Before 
 tile-game/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
+│       └── ci.yml
+├── aws/
+│   ├── CODEPIPELINE.md
+│   └── ecs-task-definition.example.json
 ├── .husky/
 │   ├── pre-commit
 │   └── pre-push
@@ -85,10 +87,9 @@ tile-game/
 │       ├── project.json
 │       ├── tsconfig.json
 │       └── vitest.config.ts
-├── docker-compose.yml          # api + web only; MongoDB is external
-├── docker-compose.dev.yml      # api + web only; MongoDB is external
-├── nginx/
-│   └── default.conf
+├── buildspec.yml               # AWS CodeBuild builds/pushes api + web images
+├── docker-compose.yml          # local api + web only; MongoDB is external
+├── docker-compose.dev.yml      # local api + web only; MongoDB is external
 ├── nx.json
 ├── package.json
 ├── tsconfig.base.json
@@ -490,20 +491,47 @@ docs: http://localhost:3001/api/docs
   - API uses `npm run build:api:docker`.
   - Web uses `npm run build:web:docker`.
 - API Docker build compiles `libs/shared` and packages it under `node_modules/@tile-game/shared` in the image so runtime aliases resolve.
-- Host-installed production Nginx config lives at `nginx/default.conf`.
-- Development compose lives at `docker-compose.dev.yml`.
-- Production compose lives at `docker-compose.yml`.
+- Web Docker build accepts `NEXT_PUBLIC_API_URL` as a build argument because Next.js public env values are baked at build time.
+- Compose files are for local/container parity only:
+  - `docker-compose.dev.yml`
+  - `docker-compose.yml`
 - Do not add a MongoDB container; MongoDB is external via `MONGODB_URI`.
 
 Do not add service-specific compose files unless needed.
 
-Production deployments use host-installed Nginx as the public entrypoint:
+## AWS Deployment Rules
 
-- `http://PUBLIC_IP/` proxies to `127.0.0.1:3000`.
-- `http://PUBLIC_IP/api/*` proxies to `127.0.0.1:3001`.
-- No domain is required; Nginx uses `server_name _`.
-- Do not run an Nginx container in production compose.
-- Keep app containers bound to localhost so only host Nginx is public.
+AWS CodePipeline/ECR/ECS is the only production deployment path documented in this repository.
+
+Single source of truth:
+
+```text
+aws/CODEPIPELINE.md
+```
+
+Deployment flow:
+
+```text
+Developer pushes to develop
+  -> CodePipeline starts automatically
+  -> CodeBuild builds Docker images
+  -> CodeBuild pushes images to ECR
+  -> CodePipeline tells ECS to deploy
+  -> ECS pulls images from ECR
+  -> New ECS task/container starts
+  -> Application is live
+```
+
+Rules:
+
+- Keep root `buildspec.yml` as the CodeBuild buildspec.
+- Keep ECR repositories as `tile-game-api` and `tile-game-web` unless `aws/CODEPIPELINE.md` is updated at the same time.
+- Keep ECS container names as `api` and `web`; they must match `buildspec.yml`, `imagedefinitions.json`, and the ECS task definition.
+- Keep MongoDB external and provide `MONGODB_URI` through SSM Parameter Store or Secrets Manager.
+- Use an Application Load Balancer for public traffic:
+  - `/` routes to the web target group on port `3000`.
+  - `/api/*` routes to the API target group on port `3001`.
+- Do not add a second production deployment path unless the deployment source of truth is updated in the same change.
 
 ## GitHub Actions
 
@@ -520,17 +548,7 @@ npm run build:web:docker
 
 Set `NX_DAEMON=false` in CI to avoid daemon socket issues in GitHub runners.
 
-Deployment uses a GitHub self-hosted runner on the Google Cloud server.
-
-Rules:
-
-- Do not push images to GHCR for this deployment style.
-- Do not SSH from GitHub Actions into the server.
-- The self-hosted runner should run `docker compose up --build -d` locally.
-- The workflow should write `.env` from GitHub secrets before running Compose.
-- Required secrets are `MONGODB_URI`, `FRONTEND_URL`, and optionally `NEXT_PUBLIC_API_URL`.
-- Keep `NEXT_PUBLIC_API_URL` empty when host Nginx proxies `/api` on the same public IP.
-- Health check `http://127.0.0.1:3001/api/health` and `http://127.0.0.1:3000` after deployment.
+GitHub Actions is for CI only. Production deployment is owned by AWS CodePipeline as documented in `aws/CODEPIPELINE.md`.
 
 ## Editing Rules
 

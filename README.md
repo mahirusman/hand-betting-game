@@ -4,14 +4,6 @@ A full-stack Nx monorepo for a dark casino-style hand-betting game played with a
 
 ---
 
-## Live Deployment
-
-- **Frontend:** [http://34.27.190.15/](http://34.27.190.15/)
-- **Backend health:** [http://34.27.190.15/api/health](http://34.27.190.15/api/health)
-- **API docs:** [http://34.27.190.15/api/docs](http://34.27.190.15/api/docs)
-
----
-
 ## Stack
 
 - Nx 22 monorepo with `api`, `web`, and `shared` projects
@@ -186,28 +178,13 @@ The shared engine has unit coverage for tile generation, shuffling, dealing, bet
 
 ## Docker
 
-Deployment and VM setup steps are documented in [`nginx/DEPLOYMENT.md`](nginx/DEPLOYMENT.md).
+Docker Compose is kept for local/container parity. Production deployment is handled by AWS CodePipeline/ECR/ECS, not Docker Compose.
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Production compose builds `tile-game-api` and `tile-game-web`. It does **not** run MongoDB or Nginx — MongoDB is expected to be an external Atlas instance reached through `MONGODB_URI`, and Nginx is host-installed (config in `nginx/default.conf`). The API and web containers bind to localhost only:
-
-```
-127.0.0.1:3000 -> web
-127.0.0.1:3001 -> api
-```
-
-For a Google Cloud VM with host-installed Nginx and no domain, copy the provided config:
-
-```bash
-sudo cp nginx/default.conf /etc/nginx/conf.d/tile-game.conf
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-Open firewall ingress for TCP `80`, then visit `http://YOUR_PUBLIC_IP/`. Behind Nginx, leave `NEXT_PUBLIC_API_URL=` empty so browser requests use the same public IP.
+Both Compose files run only the API and web services. MongoDB remains external through `MONGODB_URI`.
 
 ---
 
@@ -215,16 +192,31 @@ Open firewall ingress for TCP `80`, then visit `http://YOUR_PUBLIC_IP/`. Behind 
 
 CI runs on pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-For the live Google Cloud deployment steps and verification commands, see [`nginx/DEPLOYMENT.md`](nginx/DEPLOYMENT.md).
+Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
 
-Deployment uses a **GitHub self-hosted runner** installed on the Google Cloud VM. The workflow ([`deploy.yml`](.github/workflows/deploy.yml)) checks out the repo on the server, writes `.env` from secrets, and runs `docker compose up --build -d`.
+### AWS CodePipeline / ECS
 
-Required GitHub secrets:
+AWS CodePipeline/ECR/ECS is the single production deployment path for this repository. The deployment source of truth is [`aws/CODEPIPELINE.md`](aws/CODEPIPELINE.md).
+
+The intended AWS flow is:
 
 ```text
-MONGODB_URI          # Atlas connection string
-FRONTEND_URL         # http://YOUR_PUBLIC_IP
-NEXT_PUBLIC_API_URL  # Empty when host Nginx proxies /api on the same IP
+Developer pushes to develop
+  -> CodePipeline starts automatically
+  -> CodeBuild builds Docker images
+  -> CodeBuild pushes images to ECR
+  -> CodePipeline tells ECS to deploy
+  -> ECS pulls images from ECR
+  -> New ECS task/container starts
+  -> Application is live
 ```
 
-Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
+The root [`buildspec.yml`](buildspec.yml) builds both Docker images, pushes them to ECR, and emits the `imagedefinitions.json` artifact used by the standard ECS deploy action. The ECS container names are `api` and `web`; keep those names aligned between CodeBuild, the ECS task definition, and CodePipeline.
+
+Required AWS runtime configuration:
+
+```text
+MONGODB_URI        Stored in SSM Parameter Store or Secrets Manager
+FRONTEND_URL       Public app URL used by API CORS
+NEXT_PUBLIC_API_URL Build-time web API base URL, empty for same-origin ALB routing
+```

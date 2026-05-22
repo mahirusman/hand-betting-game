@@ -4,6 +4,8 @@ COPY package*.json ./
 RUN npm i -f
 
 FROM deps AS build
+ARG NEXT_PUBLIC_API_URL=""
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY . .
 RUN npm run build:web:docker
 

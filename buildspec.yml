@@ -1,0 +1,38 @@
+version: 0.2
+
+env:
+  shell: bash
+  variables:
+    ECR_API_REPOSITORY: tile-game-api
+    ECR_WEB_REPOSITORY: tile-game-web
+    IMAGE_TAG_ALIAS: develop-latest
+    NEXT_PUBLIC_API_URL: ''
+
+phases:
+  pre_build:
+    commands:
+      - set -euo pipefail
+      - AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION}}"
+      - AWS_ACCOUNT_ID="${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
+      - IMAGE_TAG="${IMAGE_TAG:-${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest}}"
+      - IMAGE_TAG="${IMAGE_TAG:0:12}"
+      - API_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_API_REPOSITORY}"
+      - WEB_REPOSITORY_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_WEB_REPOSITORY}"
+      - aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+  build:
+    commands:
+      - docker build -f apps/api/Dockerfile -t "${API_REPOSITORY_URI}:${IMAGE_TAG}" -t "${API_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}" .
+      - docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" -t "${WEB_REPOSITORY_URI}:${IMAGE_TAG}" -t "${WEB_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}" .
+  post_build:
+    commands:
+      - docker push "${API_REPOSITORY_URI}:${IMAGE_TAG}"
+      - docker push "${API_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}"
+      - docker push "${WEB_REPOSITORY_URI}:${IMAGE_TAG}"
+      - docker push "${WEB_REPOSITORY_URI}:${IMAGE_TAG_ALIAS}"
+      - printf '[{"name":"api","imageUri":"%s"},{"name":"web","imageUri":"%s"}]' "${API_REPOSITORY_URI}:${IMAGE_TAG}" "${WEB_REPOSITORY_URI}:${IMAGE_TAG}" > imagedefinitions.json
+      - cat imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
+    - aws/ecs-task-definition.example.json
