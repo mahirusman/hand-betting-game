@@ -16,6 +16,41 @@ The shared library owns every game rule (tile generation, shuffling, dealing, be
 
 ---
 
+## CI / Deployment
+
+CI runs on pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
+
+### AWS CodePipeline / ECS
+
+AWS CodePipeline/ECR/ECS is the single production deployment path for this repository. The deployment source of truth is [`aws/CODEPIPELINE.md`](aws/CODEPIPELINE.md).
+
+The intended AWS flow is:
+
+```text
+Developer pushes to develop
+  -> CodePipeline starts automatically
+  -> CodeBuild builds Docker images
+  -> CodeBuild pushes images to ECR
+  -> CodePipeline tells ECS to deploy
+  -> ECS pulls images from ECR
+  -> New ECS task/container starts
+  -> Application is live
+```
+
+The root [`buildspec.yml`](buildspec.yml) builds both Docker images, pushes them to ECR, and emits the `imagedefinitions.json` artifact used by the standard ECS deploy action. The ECS container names are `api` and `web`; keep those names aligned between CodeBuild, the ECS task definition, and CodePipeline.
+
+Required AWS runtime configuration:
+
+```text
+MONGODB_URI        Stored in SSM Parameter Store or Secrets Manager
+FRONTEND_URL       Public app URL used by API CORS
+NEXT_PUBLIC_API_URL Build-time web API base URL, empty for same-origin ALB routing
+```
+
+---
+
 ## AI Agent Workflow
 
 Codex is the primary AI agent for this repository. It should read [`AGENTS.md`](AGENTS.md) before editing, preserve the Nx monorepo boundaries, and use Git status/diffs to track uncommitted work before making changes.
@@ -129,40 +164,6 @@ All thresholds live in `libs/shared/src/config/game.config.ts`.
 
 ---
 
-## API
-
-```
-POST  /api/games                  Create a new game
-GET   /api/games/:gameId          Fetch an existing game
-POST  /api/games/:gameId/bet      Place a higher/lower bet
-GET   /api/games/leaderboard      Top 5 finished games by score
-GET   /api/health                 Liveness probe
-```
-
-All success responses are wrapped in:
-
-```json
-{
-  "success": true,
-  "data": { "...": "GameState or LeaderboardEntry[]" },
-  "timestamp": "2026-05-04T00:00:00.000Z"
-}
-```
-
-Errors share a parallel envelope:
-
-```json
-{
-  "success": false,
-  "error": { "code": "GAME_NOT_FOUND", "message": "Game not found." },
-  "timestamp": "2026-05-04T00:00:00.000Z"
-}
-```
-
-Error codes: `GAME_OVER`, `GAME_NOT_FOUND`, `INVALID_BET`, `VALIDATION_ERROR`, `INTERNAL_ERROR`.
-
----
-
 ## Testing
 
 ```bash
@@ -187,36 +188,3 @@ docker compose -f docker-compose.dev.yml up --build
 Both Compose files run only the API and web services. MongoDB remains external through `MONGODB_URI`.
 
 ---
-
-## CI / Deployment
-
-CI runs on pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
-Branch protection on `main`: require pull request, at least 1 approval, passing `ci` workflow, no direct pushes.
-
-### AWS CodePipeline / ECS
-
-AWS CodePipeline/ECR/ECS is the single production deployment path for this repository. The deployment source of truth is [`aws/CODEPIPELINE.md`](aws/CODEPIPELINE.md).
-
-The intended AWS flow is:
-
-```text
-Developer pushes to develop
-  -> CodePipeline starts automatically
-  -> CodeBuild builds Docker images
-  -> CodeBuild pushes images to ECR
-  -> CodePipeline tells ECS to deploy
-  -> ECS pulls images from ECR
-  -> New ECS task/container starts
-  -> Application is live
-```
-
-The root [`buildspec.yml`](buildspec.yml) builds both Docker images, pushes them to ECR, and emits the `imagedefinitions.json` artifact used by the standard ECS deploy action. The ECS container names are `api` and `web`; keep those names aligned between CodeBuild, the ECS task definition, and CodePipeline.
-
-Required AWS runtime configuration:
-
-```text
-MONGODB_URI        Stored in SSM Parameter Store or Secrets Manager
-FRONTEND_URL       Public app URL used by API CORS
-NEXT_PUBLIC_API_URL Build-time web API base URL, empty for same-origin ALB routing
-```
