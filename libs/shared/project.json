@@ -3,6 +3,10 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "libs/shared/src",
   "projectType": "library",
+  "metadata": {
+    "description": "Shared TypeScript game engine, rules, and API types."
+  },
+  "tags": ["scope:shared", "type:library"],
   "targets": {
     "build": {
       "executor": "@nx/js:tsc",

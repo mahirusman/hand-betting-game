@@ -3,6 +3,10 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/api/src",
   "projectType": "application",
+  "metadata": {
+    "description": "NestJS API for the Mahjong hand betting game."
+  },
+  "tags": ["scope:api", "type:application"],
   "targets": {
     "build": {
       "executor": "@nx/js:tsc",
